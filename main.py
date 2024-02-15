@@ -3,11 +3,14 @@ import asyncio
 import json
 import os
 import pandas as pd
+from datetime import datetime
 
 URL_PROV = "https://sirekap-obj-data.kpu.go.id/wilayah/pemilu/ppwp/0.json"
 BASE_URL_WILAYAH = "https://sirekap-obj-data.kpu.go.id/wilayah/pemilu/ppwp/"
 BASE_URL_TPS = "https://sirekap-obj-data.kpu.go.id/pemilu/hhcw/ppwp/"
 WEB_URL = "https://pemilu2024.kpu.go.id/pilpres/hitung-suara"
+
+timeStamp = datetime.now()
 
 with open("checkpoint.json", "r") as f:
     checkPoint = json.load(fp=f)
@@ -32,101 +35,130 @@ async def main():
             dataProv = await reqProv.json()
             for prov in dataProv[checkPoint["provIndex"]:]:
                 if (prov["nama"] == "Luar Negeri"):
-                    checkPoint["provIndex"] += checkPoint["provIndex"]+1
+                    checkPoint["provIndex"] += 1
                     checkPointUpdate(checkPoint)
                     pass
                 else:
                     namaProv = prov["nama"]
                     kodeProv = prov["kode"]
-                    await asyncio.create_task(kotaListReq(session, kodeProv, namaProv))
-                    checkPoint["provIndex"] = checkPoint["provIndex"]+1
+                    await asyncio.ensure_future(kotaListReq(session, kodeProv, namaProv))
+                    checkPoint["provIndex"] += 1
                     checkPointUpdate(checkPoint)
-                checkPoint["provIndex"] = 0
-                checkPointUpdate(checkPoint)
+            checkPoint["provIndex"] = 0
+            checkPointUpdate(checkPoint)
             
 async def kotaListReq(session, kodeProv, namaProv):
     async with session.get(BASE_URL_WILAYAH+kodeProv+".json") as reqKota:
         dataKota = await reqKota.json()
-        checkPoint["kotaIndex"] = 0
-        checkPointUpdate(checkPoint)
+        listProvTask = []
         for kota in dataKota[checkPoint["kotaIndex"]:]:
             namaKota = kota["nama"]
             kodeKota = kota["kode"]
-            makeDir(f'{namaProv}/{namaKota}')
-            await asyncio.create_task(kecListReq(session, kodeProv, kodeKota, namaProv, namaKota))
-            checkPoint["kotaIndex"] = checkPoint["kotaIndex"]+1
+            makeDir(f'{timeStamp}/{namaProv}/{namaKota}')
+            listProvTask.append(asyncio.ensure_future(kecListReq(session, kodeProv, kodeKota, namaProv, namaKota)))
+            checkPoint["kotaIndex"] += 1
             checkPointUpdate(checkPoint)
+        listProvResult = await asyncio.gather(*listProvTask)
         checkPoint["kotaIndex"] = 0
         checkPointUpdate(checkPoint)
         
 async def kecListReq(session, kodeProv, kodeKota, namaProv, namaKota):
     async with session.get(BASE_URL_WILAYAH+f'{kodeProv}/{kodeKota}'+".json") as reqKec:
         dataKec = await reqKec.json()
-        checkPoint["kecIndex"] = 0
-        checkPointUpdate(checkPoint)
+        listKotaTask = []
         for kec in dataKec[checkPoint["kecIndex"]:]:
             namaKec = kec["nama"]
             kodeKec = kec["kode"]
-            makeDir(f'{namaProv}/{namaKota}')
-            await asyncio.create_task(kelListReq(session, kodeProv, kodeKota, kodeKec, namaProv, namaKota, namaKec))
-            checkPoint["kecIndex"] = checkPoint["kecIndex"]+1
+            makeDir(f'{timeStamp}/{namaProv}/{namaKota}')
+            listKotaTask.append(asyncio.ensure_future(kelListReq(session, kodeProv, kodeKota, kodeKec, namaProv, namaKota, namaKec)))
+            checkPoint["kecIndex"] += 1
             checkPointUpdate(checkPoint)
+        listKotaResult = await asyncio.gather(*listKotaTask)
         checkPoint["kecIndex"] = 0
         checkPointUpdate(checkPoint)
         
 async def kelListReq(session, kodeProv, kodeKota, kodeKec, namaProv, namaKota, namaKec):
     async with session.get(BASE_URL_WILAYAH+f'{kodeProv}/{kodeKota}/{kodeKec}'+".json") as reqKel:
-        dataKel= await reqKel.json()
+        dataKel = await reqKel.json()
+        listKecTask = []
         for kel in dataKel[checkPoint["kelIndex"]:]:
             namaKel = kel["nama"]
             kodeKel = kel["kode"]
-            makeDir(f'{namaProv}/{namaKota}/{namaKec}')
-            await asyncio.create_task(tpsListReq(session, kodeProv, kodeKota, kodeKec, kodeKel, namaProv, namaKota, namaKec, namaKel))
-            checkPoint["kelIndex"] = checkPoint["kelIndex"]+1
+            makeDir(f'{timeStamp}/{namaProv}/{namaKota}/{namaKec}')
+            listKecTask.append(asyncio.ensure_future(tpsListReq(session, kodeProv, kodeKota, kodeKec, kodeKel, namaProv, namaKota, namaKec, namaKel)))
+            checkPoint["kelIndex"] += 1
             checkPointUpdate(checkPoint)
+        dataListKecResult = await asyncio.gather(*listKecTask)
         checkPoint["kelIndex"] = 0
         checkPointUpdate(checkPoint)
         
 async def tpsListReq(session, kodeProv, kodeKota, kodeKec, kodeKel, namaProv, namaKota, namaKec, namaKel):
     async with session.get(BASE_URL_WILAYAH+f'{kodeProv}/{kodeKota}/{kodeKec}/{kodeKel}'+".json") as reqTPS:
+        dir = f'{timeStamp}/{namaProv}/{namaKota}/{namaKec}'
         listTPS = await reqTPS.json()
+        dataListKel = []
+        listKelTask = []
         for tps in listTPS:
             namaTPS = tps["nama"]
             kodeTPS = tps["kode"]
-            makeDir(f'{namaProv}/{namaKota}/{namaKec}/{namaKel}')
-            await asyncio.create_task(tpsDataReq(session, kodeProv, kodeKota, kodeKec, kodeKel, kodeTPS, namaProv, namaKota, namaKec, namaKel, namaTPS))
-        
+            makeDir(f'{timeStamp}/{namaProv}/{namaKota}/{namaKec}')
+            listKelTask.append(asyncio.ensure_future(tpsDataReq(session, kodeProv, kodeKota, kodeKec, kodeKel, kodeTPS, namaProv, namaKota, namaKec, namaKel, namaTPS)))
+        dataListKelResult = await asyncio.gather(*listKelTask)
+        dataListKel = list(dataListKelResult)
+        df = pd.DataFrame(dataListKel)
+        namaFile = str(namaKel).replace("/", "Atau")
+        df.to_csv(f'{dir}/{namaFile}.csv', index=False)
+            
 async def tpsDataReq(session, kodeProv, kodeKota, kodeKec, kodeKel, kodeTPS, namaProv, namaKota, namaKec, namaKel, namaTPS):
     tpsID = f'{kodeProv}/{kodeKota}/{kodeKec}/{kodeKel}/{kodeTPS}'
     async with session.get(BASE_URL_TPS+tpsID+".json") as reqDataTPS:
-        dir = f'{namaProv}/{namaKota}/{namaKec}/{namaKel}'
+        dir = f'{timeStamp}/{namaProv}/{namaKota}/{namaKec}/{namaKel}'
         dataTPS = await reqDataTPS.json()
-        print('> ' + dir + "/" + namaTPS)
+        print('[+] ' + dir + "/" + namaTPS)
         
         if (dataTPS["chart"] != None):
-            dataTPS["chart"] = {
-                "01": dataTPS["chart"]["100025"],
-                "02": dataTPS["chart"]["100026"],
-                "03": dataTPS["chart"]["100027"]
+            try:
+                calon = {
+                    "suara_01": dataTPS["chart"]["100025"],
+                    "suara_02": dataTPS["chart"]["100026"],
+                    "suara_03": dataTPS["chart"]["100027"]
+                }
+            except KeyError:
+                calon = {
+                "suara_01": 0,
+                "suara_02": 0,
+                "suara_03": 0
+            }
+        else:
+            calon = {
+                "suara_01": 0,
+                "suara_02": 0,
+                "suara_03": 0
             }
         
-        jsonData = {
+        finalData = {
             "urlTPS": WEB_URL+"/"+tpsID,
             "namaProv": namaProv,
             "namaKota": namaKota,
             "namaKec": namaKec,
             "namaKel": namaKel,
             "namaTPS": namaTPS,
-            "kodeTPS": kodeTPS,
-            "dataTPS": dataTPS
+            "kodeTPS": kodeTPS
         }
         
-        df = pd.DataFrame([jsonData])
+        finalData.update(calon)
+        if dataTPS["administrasi"] != None:
+            # for key in dataTPS["administrasi"]:
+            finalData.update(dataTPS["administrasi"])
+        if dataTPS["psu"] != None:
+            finalData.update({"psu": dataTPS["psu"]})
+        finalData.update({
+            "status_adm": dataTPS["status_adm"],
+            "status_suara": dataTPS["status_suara"],
+            "update_time": dataTPS["ts"]
+        })
         
-        df.to_csv(f'{dir}/{namaTPS}.csv', index=False)
-        
-        with open(f'{dir}/{namaTPS}.json', "w") as f:
-            f.write(json.dumps(jsonData, indent=4))
+        return finalData
         
 if __name__ == "__main__":
     asyncio.run(main())
