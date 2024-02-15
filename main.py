@@ -33,7 +33,7 @@ async def main():
     async with aiohttp.ClientSession() as session:
         async with session.get(URL_PROV) as reqProv:
             dataProv = await reqProv.json()
-            for prov in dataProv[checkPoint["provIndex"]:]:
+            for prov in dataProv:
                 if (prov["nama"] == "Luar Negeri"):
                     checkPoint["provIndex"] += 1
                     checkPointUpdate(checkPoint)
@@ -42,55 +42,40 @@ async def main():
                     namaProv = prov["nama"]
                     kodeProv = prov["kode"]
                     await asyncio.ensure_future(kotaListReq(session, kodeProv, namaProv))
-                    checkPoint["provIndex"] += 1
-                    checkPointUpdate(checkPoint)
-            checkPoint["provIndex"] = 0
-            checkPointUpdate(checkPoint)
             
 async def kotaListReq(session, kodeProv, namaProv):
     async with session.get(BASE_URL_WILAYAH+kodeProv+".json") as reqKota:
         dataKota = await reqKota.json()
         listProvTask = []
-        for kota in dataKota[checkPoint["kotaIndex"]:]:
+        for kota in dataKota:
             namaKota = kota["nama"]
             kodeKota = kota["kode"]
             makeDir(f'{timeStamp}/{namaProv}/{namaKota}')
             listProvTask.append(asyncio.ensure_future(kecListReq(session, kodeProv, kodeKota, namaProv, namaKota)))
-            checkPoint["kotaIndex"] += 1
-            checkPointUpdate(checkPoint)
         listProvResult = await asyncio.gather(*listProvTask)
-        checkPoint["kotaIndex"] = 0
-        checkPointUpdate(checkPoint)
         
 async def kecListReq(session, kodeProv, kodeKota, namaProv, namaKota):
     async with session.get(BASE_URL_WILAYAH+f'{kodeProv}/{kodeKota}'+".json") as reqKec:
         dataKec = await reqKec.json()
         listKotaTask = []
-        for kec in dataKec[checkPoint["kecIndex"]:]:
+        for kec in dataKec:
             namaKec = kec["nama"]
             kodeKec = kec["kode"]
             makeDir(f'{timeStamp}/{namaProv}/{namaKota}')
             listKotaTask.append(asyncio.ensure_future(kelListReq(session, kodeProv, kodeKota, kodeKec, namaProv, namaKota, namaKec)))
-            checkPoint["kecIndex"] += 1
-            checkPointUpdate(checkPoint)
         listKotaResult = await asyncio.gather(*listKotaTask)
-        checkPoint["kecIndex"] = 0
-        checkPointUpdate(checkPoint)
         
 async def kelListReq(session, kodeProv, kodeKota, kodeKec, namaProv, namaKota, namaKec):
     async with session.get(BASE_URL_WILAYAH+f'{kodeProv}/{kodeKota}/{kodeKec}'+".json") as reqKel:
         dataKel = await reqKel.json()
         listKecTask = []
-        for kel in dataKel[checkPoint["kelIndex"]:]:
+        for kel in dataKel:
             namaKel = kel["nama"]
             kodeKel = kel["kode"]
             makeDir(f'{timeStamp}/{namaProv}/{namaKota}/{namaKec}')
             listKecTask.append(asyncio.ensure_future(tpsListReq(session, kodeProv, kodeKota, kodeKec, kodeKel, namaProv, namaKota, namaKec, namaKel)))
             checkPoint["kelIndex"] += 1
-            checkPointUpdate(checkPoint)
         dataListKecResult = await asyncio.gather(*listKecTask)
-        checkPoint["kelIndex"] = 0
-        checkPointUpdate(checkPoint)
         
 async def tpsListReq(session, kodeProv, kodeKota, kodeKec, kodeKel, namaProv, namaKota, namaKec, namaKel):
     async with session.get(BASE_URL_WILAYAH+f'{kodeProv}/{kodeKota}/{kodeKec}/{kodeKel}'+".json") as reqTPS:
@@ -113,7 +98,8 @@ async def tpsDataReq(session, kodeProv, kodeKota, kodeKec, kodeKel, kodeTPS, nam
     tpsID = f'{kodeProv}/{kodeKota}/{kodeKec}/{kodeKel}/{kodeTPS}'
     async with session.get(BASE_URL_TPS+tpsID+".json") as reqDataTPS:
         dir = f'{timeStamp}/{namaProv}/{namaKota}/{namaKec}/{namaKel}'
-        dataTPS = await reqDataTPS.json()
+        resp = await reqDataTPS.read()
+        dataTPS = json.loads(resp)
         print('[+] ' + dir + "/" + namaTPS)
         
         if (dataTPS["chart"] != None):
@@ -148,7 +134,6 @@ async def tpsDataReq(session, kodeProv, kodeKota, kodeKec, kodeKel, kodeTPS, nam
         
         finalData.update(calon)
         if dataTPS["administrasi"] != None:
-            # for key in dataTPS["administrasi"]:
             finalData.update(dataTPS["administrasi"])
         if dataTPS["psu"] != None:
             finalData.update({"psu": dataTPS["psu"]})
