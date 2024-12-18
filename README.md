@@ -60,13 +60,13 @@ Each CSV file contains the following information:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/pemilu-2024-data-scraper.git
-   cd pemilu-2024-data-scraper
+   git clone https://github.com/agoritma/pemilu-scrap.git
+   cd pemilu-scrap
    ```
 
 2. Run the program:
    ```bash
-   python scraper.py
+   python main.py
    ```
 
 3. The data will be saved in a folder with the current timestamp.
